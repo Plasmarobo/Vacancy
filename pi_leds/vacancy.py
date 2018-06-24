@@ -11,8 +11,8 @@ import time
 
 
 class Door(object):
-    VACANT = 0
-    OCCUPIED = 1
+    VACANT = 1
+    OCCUPIED = 0
     VACANT_COLOR = (0,255,0)
     OCCUPIED_COLOR = (255,0,0)
     INVALID_COLOR = (0,0,255)

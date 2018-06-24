@@ -14,7 +14,7 @@ bool needsPublish = false;
 const char* ssid = "vacancy";
 const char* password = "bA24PL0Y";
 
-const char* mqttServer = "vacancy.local";
+const char* mqttServer = "192.168.1.1";
 const int mqttPort = 1883;
 const char* mqttUser = "vacancy";
 const char* mqttPassword = "vacancy";
@@ -78,7 +78,7 @@ void publishState(){
       delay(1000);
       Serial.print(".");
     }
-    Serial.println("Connencted");
+    Serial.println("Connected");
   }
   
   while(!client.connected()) {
@@ -97,6 +97,7 @@ void publishState(){
 }
 
 void loop() {
+  Serial.println("Heartbeat");
   if (needsPublish) {
     publishState();
   }
