@@ -26,31 +26,23 @@ PubSubClient client(espClient);
 // 10 second sleep cycle
 #define SLEEP_INTERVAL 10000 
 
-unsigned int id = 0xFF000000;
+unsigned int id = 0x00000000;
 char mqttID[32];
 char mqttTopic[32];
 
 void setup() {
   // Check if EEPROM has been initialized
+  EEPROM.begin(512);
   Serial.begin(115200);
-  unsigned char id_indicator = EEPROM.read(0);
-  Serial.println("Booting, reading id");
-  if (id_indicator == 0xFF) {
-    while (id >= 0xFF000000) {
-      randomSeed(ESP.getCycleCount());
-      id = random(INT_MAX);
-    }
+  EEPROM.get(0, id);
+  Serial.printf("\nBooting, read id %08x\n", id);
+  if (id == 0xFFFFFFFF || id == 0) {
+    randomSeed(ESP.getCycleCount());
+    id = random(0xFFFFFFFD)+1;
     Serial.printf("Generated id: %08x, saving...\n", id);
-    for (int i = 0; i < sizeof(id); ++i) {
-      EEPROM.write((unsigned char) (id >> (sizeof(id) - i - 1)) & 0xFF, i);
-    }
-  } else {
-    id = 0;
-    for (int i = 0; i < sizeof(id); ++i) {
-      id |= EEPROM.read(i) << (sizeof(id) - i - 1);
-    }
-    Serial.printf("Found id %08x\n", id);
+    EEPROM.put(0, id);
   }
+  EEPROM.end();
   sprintf(&mqttID[0], "doorsensor%08x", id);
   sprintf(&mqttTopic[0], "door/sensor%08x/status", id);
   client.setServer(mqttServer, mqttPort);
@@ -80,14 +72,15 @@ void publishState(){
     }
     Serial.println("Connected");
   }
-  
-  while(!client.connected()) {
+  if(!client.connected()) {
     Serial.print("Connecting MQTT...");
-    if (!client.connect(mqttID, mqttUser, mqttPassword)){
-      delay(2000);
-      Serial.print(".");
-    } else {
-      Serial.println("Connected");
+    while(!client.connected()) {
+      if (!client.connect(mqttID, mqttUser, mqttPassword)){
+        delay(2000);
+        Serial.print(".");
+      } else {
+        Serial.println("Connected");
+      }
     }
   }
   client.publish(&mqttTopic[0], (doorState ? "1" : "0"), true);

@@ -4,6 +4,7 @@ from bibliopixel.drivers.channel_order import ChannelOrder
 from bibliopixel.drivers.spi_interfaces import SPI_INTERFACES
 from bibliopixel.drivers.SPI.LPD8806 import LPD8806
 from bibliopixel.layout import Strip
+import json
 import paho.mqtt.subscribe as subscribe
 import re
 import sys
@@ -11,8 +12,8 @@ import time
 
 
 class Door(object):
-    VACANT = 1
-    OCCUPIED = 0
+    VACANT = 0
+    OCCUPIED = 1
     VACANT_COLOR = (0,255,0)
     OCCUPIED_COLOR = (255,0,0)
     INVALID_COLOR = (0,0,255)
@@ -39,6 +40,21 @@ class Door(object):
         for i in range(self.led_count):
             led_buffer.set(self.start_addr + i, color)
 
+    def deflate(self):
+        return {
+            'sensor': self.sensor_name,
+            'state': self.state,
+            'start_addr': self.start_addr,
+            'led_count': self.led_count
+        }
+
+    def inflate(self, obj):
+        self.sensor_name = obj['sensor']
+        self.state = obj['state']
+        self.start_addr = obj['state_addr']
+        self.led_count = obj['led_count']
+
+
 
 class VacancySign(object):
 
@@ -53,6 +69,7 @@ class VacancySign(object):
         self.next_addr = 0
         self.addr_stride = leds_per_door
         self.clear()
+        self.load()
 
     def onMessage(self, client, userdata, message):
         print("{} {}".format(message.topic, message.payload))
@@ -63,9 +80,13 @@ class VacancySign(object):
             if sensor in self.doors.keys():
                 self.doors[sensor].setState(state)
             else:
-                self.doors[sensor] = Door(matches.group(1), state, self.next_addr, self.addr_stride)
-                self.next_addr += self.addr_stride
+                self.addDoor(sensor, state)
             self.updateDisplay()
+
+    def addDoor(self, sensor, state):
+        self.doors[sensor] = Door(sensor, state, self.next_addr, self.addr_stride)
+        self.next_addr += self.addr_stride
+        self.save()
 
     def updateDisplay(self):
         self.leds.all_off()
@@ -79,6 +100,28 @@ class VacancySign(object):
     def clear(self):
         self.leds.all_off()
         self.leds.update()
+
+    def save(self):
+        jsonDict = { 'next_addr' : self.next_addr, 'doors': {} }
+        print(self.doors)
+        for sensor, door in self.doors.items():
+            jsonDict['doors'][sensor] = door.deflate()
+        with open('/etc/vacancy/config.json', 'w') as file:
+            file.write(json.dumps(jsonDict))
+
+    def load(self):
+        try:
+            with open('/etc/vacancy/config.json', 'r') as file:
+                jsonDict = json.loads(file.read())
+                self.next_addr = jsonDict['next_addr']
+                for sensor, door in jsonDict['doors'].items():
+                    d = Door('', 0, 0, 0)
+                    d.inflate(door)
+                    self.doors[sensor] = d
+        except FileNotFoundError:
+            pass
+        except ValueError:
+            pass
 
 
 def main():
